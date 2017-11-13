@@ -60,11 +60,15 @@ func (o *fileContext) commit() (fileName string, err error) {
 	}
 	o.f.Close()
 	tmpName := o.f.Name()
-	fileName = strings.TrimRight(tmpName, ".tmp")
-	if err = os.Rename(tmpName, fileName); err != nil {
-		return
+	if o.counter == 0 {
+		err = os.Remove(tmpName)
+	} else {
+		fileName = strings.TrimRight(tmpName, ".tmp")
+		if err = os.Rename(tmpName, fileName); err != nil {
+			return
+		}
+		log.Printf("%d lines written to file %s\n", o.counter, fileName)
 	}
-	log.Printf("%d lines written to file %s\n", o.counter, fileName)
 	err = o.reset(o.nameGenerator())
 	return
 }
