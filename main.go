@@ -11,9 +11,11 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	lumberjack "gopkg.in/natefinch/lumberjack.v2"
@@ -112,10 +114,32 @@ func nameGenerator(cfg *config) newNameGen {
 	return f
 }
 
-func main() {
+func killCatch(cmd *exec.Cmd, ctx context, nameGen newNameGen, cfg *config) {
+	signalChannel := make(chan os.Signal, 2)
+	signal.Notify(signalChannel, os.Interrupt, syscall.SIGTERM, syscall.SIGKILL)
+	go func() {
+		<-signalChannel
+		log.Printf("Kill signal catch. Start cleanup process\n")
+		cmd.Process.Kill()
+		cleanup(ctx, cfg, nameGen)
+	}()
+}
+
+func cleanup(ctx context, cfg *config, nameGen newNameGen) {
 	var (
 		fileName string
 		err      error
+	)
+	if fileName, err = ctx.commit(nameGen); err != nil {
+		log.Printf("ERROR: %s\n", err)
+		return
+	}
+	runConvertScript(fileName, cfg)
+}
+
+func main() {
+	var (
+		err error
 	)
 	wg = &sync.WaitGroup{}
 	linesChan = make(chan string)
@@ -136,13 +160,14 @@ func main() {
 	log.Printf("Output dir: %s\n", cfg.OutDir)
 	log.Printf("Log file: %s\n", logFilePath)
 	log.Printf("Out process script: %s %s\n", cfg.OutScript, strings.Join(cfg.OutScriptParams, " "))
-	log.Printf(ctx.contextName())
+	log.Printf("Context: %s\n", ctx.contextName())
 
 	cmd := exec.Command(cfg.Commad, cfg.CommadArgs...)
 	ticker := time.NewTicker(time.Second * time.Duration(cfg.WriteInterval))
 	stdout, _ := cmd.StdoutPipe()
 	scanner := bufio.NewScanner(stdout)
 	cmd.Start()
+	killCatch(cmd, ctx, nameGen, cfg)
 	// append lines from process out to lines
 	go func() {
 		for {
@@ -181,10 +206,5 @@ func main() {
 	if err = cmd.Wait(); err != nil {
 		log.Printf("Error for commad %s. %s\n", cfg.Commad, err)
 	}
-	// cleanup
-	if fileName, err = ctx.commit(nameGen); err != nil {
-		log.Printf("ERROR: %s\n", err)
-		return
-	}
-	runConvertScript(fileName, cfg)
+
 }
