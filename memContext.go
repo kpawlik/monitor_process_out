@@ -34,6 +34,7 @@ func (o *memContext) commit(nameGen newNameGen) (fileName string, err error) {
 	copy(outLines, o.lines)
 	fileName = o.file
 	if len(outLines) == 0 {
+		fileName = ""
 		return
 	}
 	if ioutil.WriteFile(fileName, []byte(strings.Join(outLines, "\n")), os.ModePerm); err != nil {

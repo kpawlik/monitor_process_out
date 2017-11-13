@@ -22,13 +22,14 @@ import (
 const logFileName = "process_out_monitor.log"
 
 var (
-	configFile   string
-	err          error
-	linesChan    chan string
-	cfg          *config
-	nameTemplate *template.Template
-	logFilePath  string
-	wg           *sync.WaitGroup
+	configFile    string
+	err           error
+	linesChan     chan string
+	fileNamesChan chan string
+	cfg           *config
+	nameTemplate  *template.Template
+	logFilePath   string
+	wg            *sync.WaitGroup
 )
 
 type config struct {
@@ -78,12 +79,19 @@ func readConfig() *config {
 }
 
 // Run convert script and check process status
-func runConvertScript(fileName string, cfg *config) {
-	params := append(cfg.OutScriptParams, fileName)
-	cmd := exec.Command(cfg.OutScript, params...)
-	if err = cmd.Run(); err != nil {
-		log.Printf("ERROR: Start convert script failed: %s\nProcess: %s\n",
-			err, strings.Join(cmd.Args, " "))
+func runConvertScript(fileNamesChan chan string, cfg *config, wg *sync.WaitGroup) {
+	for {
+		fileName := <-fileNamesChan
+		if len(fileName) == 0 {
+			continue
+		}
+		params := append(cfg.OutScriptParams, fileName)
+		cmd := exec.Command(cfg.OutScript, params...)
+		if err = cmd.Run(); err != nil {
+			log.Printf("ERROR: Start convert script failed: %s\nProcess: %s\n",
+				err, strings.Join(cmd.Args, " "))
+		}
+		wg.Done()
 	}
 }
 
@@ -112,24 +120,14 @@ func nameGenerator(cfg *config) newNameGen {
 	return f
 }
 
-func cleanup(ctx context, cfg *config, nameGen newNameGen) {
-	var (
-		fileName string
-		err      error
-	)
-	if fileName, err = ctx.commit(nameGen); err != nil {
-		log.Printf("ERROR: %s\n", err)
-		return
-	}
-	runConvertScript(fileName, cfg)
-}
-
 func main() {
 	var (
-		err error
+		err      error
+		fileName string
 	)
 	wg = &sync.WaitGroup{}
 	linesChan = make(chan string)
+	fileNamesChan = make(chan string, 10)
 	cfg := readConfig()
 	logFilePath = path.Join(cfg.LogDir, logFileName)
 	log.SetOutput(&lumberjack.Logger{
@@ -170,6 +168,7 @@ func main() {
 			linesChan <- m
 		}
 	}(scanner)
+	go runConvertScript(fileNamesChan, cfg, wg)
 	// write process out every tick
 	go func(ticker *time.Ticker, cfg *config, ctx context) {
 		var (
@@ -181,12 +180,19 @@ func main() {
 				log.Printf("ERROR: %s\n", err)
 				return
 			}
-			runConvertScript(fileName, cfg)
+			wg.Add(1)
+			fileNamesChan <- fileName
 		}
 	}(ticker, cfg, ctx)
 	// wait until process end
 	if err = cmd.Wait(); err != nil {
 		log.Printf("Error for commad %s. %s\n", cfg.Commad, err)
 	}
-	cleanup(ctx, cfg, nameGen)
+	if fileName, err = ctx.commit(nameGen); err != nil {
+		log.Printf("ERROR: %s\n", err)
+		return
+	}
+	wg.Add(1)
+	fileNamesChan <- fileName
+	wg.Wait()
 }
