@@ -1,0 +1,10 @@
+{
+    "write_interval": 10,
+    "command": "",
+    "command_args": [],
+    "out_dir": "",
+    "log_dir": "",
+    "out_filename_pattern": "out_{{.Timestamp}}.json",
+    "out_process_script": "",
+    "out_process_script_params": []
+}
