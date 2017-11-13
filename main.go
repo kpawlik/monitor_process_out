@@ -87,6 +87,7 @@ func runConvertScript(fileNamesChan chan string, cfg *config, wg *sync.WaitGroup
 		}
 		params := append(cfg.OutScriptParams, fileName)
 		cmd := exec.Command(cfg.OutScript, params...)
+		log.Printf("Convert: %s\n", strings.Join(cmd.Args, " "))
 		if err = cmd.Run(); err != nil {
 			log.Printf("ERROR: Start convert script failed: %s\nProcess: %s\n",
 				err, strings.Join(cmd.Args, " "))
@@ -95,25 +96,23 @@ func runConvertScript(fileNamesChan chan string, cfg *config, wg *sync.WaitGroup
 	}
 }
 
-func newFileName(cfg *config) string {
-	buff := &bytes.Buffer{}
-	timestamp := fmt.Sprintf("%s%d", time.Now().Format("20060102150405"), time.Now().Nanosecond())
-	nameTemplate.Execute(buff, struct{ Timestamp string }{Timestamp: timestamp})
-	return path.Join(cfg.OutDir, buff.String())
-}
-
-func newContext(cfg *config) (ctx context) {
-	fileName := newFileName(cfg)
+func newContext(cfg *config, nameGen newNameGen) (ctx context) {
 	switch cfg.Context {
 	case "file":
-		ctx = newFileContext(fileName)
+		ctx = newFileContext(nameGen)
 	default:
-		ctx = newMemContext(fileName)
+		ctx = newMemContext(nameGen)
 	}
 	return
 }
 
 func nameGenerator(cfg *config) newNameGen {
+	newFileName := func(cfg *config) string {
+		buff := &bytes.Buffer{}
+		timestamp := fmt.Sprintf("%s%d", time.Now().Format("20060102150405"), time.Now().Nanosecond())
+		nameTemplate.Execute(buff, struct{ Timestamp string }{Timestamp: timestamp})
+		return path.Join(cfg.OutDir, buff.String())
+	}
 	f := func() string {
 		return newFileName(cfg)
 	}
@@ -136,9 +135,8 @@ func main() {
 		MaxBackups: 20,
 	})
 	nameTemplate = template.Must(template.New("fileName").Parse(cfg.OutName))
-	ctx := newContext(cfg)
-
 	nameGen := nameGenerator(cfg)
+	ctx := newContext(cfg, nameGen)
 
 	log.Printf("Run and monitor command: %s %s\n", cfg.Commad, strings.Join(cfg.CommadArgs, " "))
 	log.Printf("Write interval: %d seconds\n", cfg.WriteInterval)
@@ -176,7 +174,7 @@ func main() {
 			err      error
 		)
 		for _ = range ticker.C {
-			if fileName, err = ctx.commit(nameGen); err != nil {
+			if fileName, err = ctx.commit(); err != nil {
 				log.Printf("ERROR: %s\n", err)
 				return
 			}
@@ -188,7 +186,7 @@ func main() {
 	if err = cmd.Wait(); err != nil {
 		log.Printf("Error for commad %s. %s\n", cfg.Commad, err)
 	}
-	if fileName, err = ctx.commit(nameGen); err != nil {
+	if fileName, err = ctx.commit(); err != nil {
 		log.Printf("ERROR: %s\n", err)
 		return
 	}

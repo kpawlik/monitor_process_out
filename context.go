@@ -4,6 +4,6 @@ type newNameGen func() string
 
 type context interface {
 	writeLine(string) error
-	commit(newNameGen) (string, error)
+	commit() (string, error)
 	contextName() string
 }

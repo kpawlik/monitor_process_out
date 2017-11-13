@@ -11,13 +11,14 @@ import (
 )
 
 type memContext struct {
-	mux   *sync.Mutex
-	file  string
-	lines []string
+	nameGenerator newNameGen
+	mux           *sync.Mutex
+	file          string
+	lines         []string
 }
 
-func newMemContext(fileName string) *memContext {
-	return &memContext{mux: &sync.Mutex{}, file: fileName}
+func newMemContext(nameGen newNameGen) *memContext {
+	return &memContext{mux: &sync.Mutex{}, file: nameGen(), nameGenerator: nameGen}
 }
 
 func (o *memContext) writeLine(line string) (err error) {
@@ -27,7 +28,7 @@ func (o *memContext) writeLine(line string) (err error) {
 	return
 }
 
-func (o *memContext) commit(nameGen newNameGen) (fileName string, err error) {
+func (o *memContext) commit() (fileName string, err error) {
 	defer o.mux.Unlock()
 	o.mux.Lock()
 	outLines := make([]string, len(o.lines))
@@ -41,7 +42,7 @@ func (o *memContext) commit(nameGen newNameGen) (fileName string, err error) {
 		return "", o.unsavedLinesError(fileName, outLines)
 	}
 	log.Printf("%d lines written to file %s\n", len(outLines), fileName)
-	o.file = nameGen()
+	o.file = o.nameGenerator()
 	o.lines = nil
 	return
 }
