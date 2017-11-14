@@ -185,6 +185,9 @@ func main() {
 	// wait until process end
 	if err = cmd.Wait(); err != nil {
 		log.Printf("Error for commad %s. %s\n", cfg.Commad, err)
+		// try store rest of the records
+		ctx.commit()
+		os.Exit(1)
 	}
 	if fileName, err = ctx.commit(); err != nil {
 		log.Printf("ERROR: %s\n", err)
