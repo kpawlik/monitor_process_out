@@ -166,6 +166,7 @@ func main() {
 			linesChan <- m
 		}
 	}(scanner)
+	// start func which run convert script for files in fileNamesChan
 	go runConvertScript(fileNamesChan, cfg, wg)
 	// write process out every tick
 	go func(ticker *time.Ticker, cfg *config, ctx context) {
@@ -189,6 +190,7 @@ func main() {
 		ctx.commit()
 		os.Exit(1)
 	}
+	// clean up rest of data in context which not been committed by ticker
 	if fileName, err = ctx.commit(); err != nil {
 		log.Printf("ERROR: %s\n", err)
 		return

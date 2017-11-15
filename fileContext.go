@@ -8,6 +8,7 @@ import (
 	"sync"
 )
 
+// Context to store process out in temporary file
 type fileContext struct {
 	nameGenerator newNameGen
 	f             *os.File
@@ -17,6 +18,8 @@ type fileContext struct {
 	buffSize      int
 }
 
+// Create new file context. NameGen is a function which generates names for files
+// where output is stored.
 func newFileContext(nameGen newNameGen) *fileContext {
 	var (
 		err  error
@@ -30,6 +33,7 @@ func newFileContext(nameGen newNameGen) *fileContext {
 	return &fileContext{mux: &sync.Mutex{}, f: file, nameGenerator: nameGen, buffSize: 1000}
 }
 
+// Reset lines buffer, counter and create new temporary file
 func (o *fileContext) reset(fileName string) (err error) {
 	o.lines = nil
 	o.counter = 0
@@ -37,6 +41,8 @@ func (o *fileContext) reset(fileName string) (err error) {
 	o.f, err = os.Create(fileName)
 	return
 }
+
+// Add line to context
 func (o *fileContext) writeLine(line string) (err error) {
 	defer o.mux.Unlock()
 	o.mux.Lock()
@@ -50,6 +56,7 @@ func (o *fileContext) writeLine(line string) (err error) {
 	return
 }
 
+// Commits buffer to file and reset context
 func (o *fileContext) commit() (fileName string, err error) {
 	defer o.mux.Unlock()
 	o.mux.Lock()
