@@ -63,7 +63,7 @@ func (o *fileContext) commit() (fileName string, err error) {
 	if o.counter == 0 {
 		err = os.Remove(tmpName)
 	} else {
-		fileName = strings.TrimRight(tmpName, ".tmp")
+		fileName = o.nameGenerator()
 		if err = os.Rename(tmpName, fileName); err != nil {
 			return
 		}

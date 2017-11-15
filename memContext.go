@@ -33,16 +33,14 @@ func (o *memContext) commit() (fileName string, err error) {
 	o.mux.Lock()
 	outLines := make([]string, len(o.lines))
 	copy(outLines, o.lines)
-	fileName = o.file
 	if len(outLines) == 0 {
-		fileName = ""
 		return
 	}
+	fileName = o.nameGenerator()
 	if ioutil.WriteFile(fileName, []byte(strings.Join(outLines, "\n")), os.ModePerm); err != nil {
 		return "", o.unsavedLinesError(fileName, outLines)
 	}
 	log.Printf("%d lines written to file %s\n", len(outLines), fileName)
-	o.file = o.nameGenerator()
 	o.lines = nil
 	return
 }
