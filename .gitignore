@@ -14,3 +14,4 @@
 .glide/
 mosaic_convert_to_csv.py
 *.tmp
+config.json
