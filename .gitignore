@@ -15,3 +15,9 @@
 mosaic_convert_to_csv.py
 *.tmp
 config.json
+cpu.pprof
+mem.pprof
+monitor_acoe_process_out
+monitor_process_out
+monitor_process_out
+monitor_process_out

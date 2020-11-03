@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"html/template"
+	"io"
 	"io/ioutil"
 	"log"
 	"os"
@@ -19,7 +20,10 @@ import (
 	lumberjack "gopkg.in/natefinch/lumberjack.v2"
 )
 
-const logFileName = "process_out_monitor.log"
+const (
+	logFileName        = "process_out_monitor.log"
+	maxScannerCapacity = 1024 * 1024
+)
 
 var (
 	configFile    string
@@ -123,6 +127,7 @@ func main() {
 	var (
 		err      error
 		fileName string
+		stdout   io.ReadCloser
 	)
 	wg = &sync.WaitGroup{}
 	linesChan = make(chan string)
@@ -147,9 +152,15 @@ func main() {
 
 	cmd := exec.Command(cfg.Commad, cfg.CommadArgs...)
 	ticker := time.NewTicker(time.Second * time.Duration(cfg.WriteInterval))
-	stdout, _ := cmd.StdoutPipe()
+	if stdout, err = cmd.StdoutPipe(); err != nil {
+		log.Printf("Error cmd.StdoutPipe(): %v\n", err)
+	}
+
 	scanner := bufio.NewScanner(stdout)
+	buf := make([]byte, maxScannerCapacity)
+	scanner.Buffer(buf, maxScannerCapacity)
 	cmd.Start()
+	log.Printf("Process PID: %d\n", cmd.Process.Pid)
 	// append lines from process out to lines
 	go func() {
 		for {
@@ -159,10 +170,13 @@ func main() {
 			}
 		}
 	}()
-	// scan process out
+	// scan new lines from process stdout
 	go func(scanner *bufio.Scanner) {
 		for scanner.Scan() {
 			m := scanner.Text()
+			if err := scanner.Err(); err != nil {
+				log.Printf("Error reading standard input: %v", err)
+			}
 			linesChan <- m
 		}
 	}(scanner)
@@ -174,7 +188,7 @@ func main() {
 			fileName string
 			err      error
 		)
-		for _ = range ticker.C {
+		for range ticker.C {
 			if fileName, err = ctx.commit(); err != nil {
 				log.Printf("ERROR: %s\n", err)
 				return
@@ -186,14 +200,10 @@ func main() {
 	// wait until process end
 	if err = cmd.Wait(); err != nil {
 		log.Printf("Error for commad %s. %s\n", cfg.Commad, err)
-		// try store rest of the records
-		ctx.commit()
-		os.Exit(1)
 	}
 	// clean up rest of data in context which not been committed by ticker
 	if fileName, err = ctx.commit(); err != nil {
 		log.Printf("ERROR: %s\n", err)
-		return
 	}
 	wg.Add(1)
 	fileNamesChan <- fileName
