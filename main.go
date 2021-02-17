@@ -23,6 +23,7 @@ import (
 const (
 	logFileName        = "process_out_monitor.log"
 	maxScannerCapacity = 1024 * 1024
+	version            = "202102171346"
 )
 
 var (
@@ -52,13 +53,19 @@ type config struct {
 func init() {
 	var (
 		help bool
+		v    bool
 	)
 	flag.StringVar(&configFile, "cfg", "config.json", "Configuration file")
 	flag.BoolVar(&help, "h", false, "Print help")
+	flag.BoolVar(&v, "v", false, "version")
 	flag.Parse()
 	if help {
+		fmt.Printf("Version: %s\n", version)
 		flag.PrintDefaults()
 		os.Exit(0)
+	}
+	if v {
+		fmt.Printf("Version: %s\n", version)
 	}
 	cfg = readConfig()
 
@@ -159,7 +166,9 @@ func main() {
 	scanner := bufio.NewScanner(stdout)
 	buf := make([]byte, maxScannerCapacity)
 	scanner.Buffer(buf, maxScannerCapacity)
-	cmd.Start()
+	if err = cmd.Start(); err != nil {
+		log.Fatalf("Error starting command: %s. %v", cmd.String(), err)
+	}
 	log.Printf("Process PID: %d\n", cmd.Process.Pid)
 	// append lines from process out to lines
 	go func() {
@@ -200,6 +209,7 @@ func main() {
 	// wait until process end
 	if err = cmd.Wait(); err != nil {
 		log.Printf("Error for commad %s. %s\n", cfg.Commad, err)
+		os.Exit(1)
 	}
 	// clean up rest of data in context which not been committed by ticker
 	if fileName, err = ctx.commit(); err != nil {
